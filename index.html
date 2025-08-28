@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Docs Portal</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f9;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    .hidden { display: none; }
+    .card-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 20px;
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .card:hover { transform: scale(1.05); }
+    input {
+      margin: 5px;
+      padding: 10px;
+      width: 200px;
+    }
+    button {
+      padding: 10px 20px;
+      border: none;
+      background: #007bff;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    button:hover { background: #0056b3; }
+    .error { color: red; margin: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Docs Portal</h1>
+
+  <div id="login-section">
+    <input type="email" id="email" placeholder="Email" aria-label="Email address"><br>
+    <input type="password" id="password" placeholder="Password" aria-label="Password"><br>
+    <div id="error-message" class="error"></div>
+    <button onclick="login()">Login</button>
+    <button onclick="signup()">Sign Up</button>
+  </div>
+
+  <div id="app-section" class="hidden">
+    <p id="user-info"></p>
+    <button onclick="logout()">Logout</button>
+    <div class="card-container" id="cards-container"></div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-analytics.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCz2FAVqRUX2SKE5cqolSFlBic-_9qWnjE",
+      authDomain: "smas-96050.firebaseapp.com",
+      projectId: "smas-96050",
+      storageBucket: "smas-96050.firebasestorage.app",
+      messagingSenderId: "478474212843",
+      appId: "1:478474212843:web:5e16f9b89525029118f5ae",
+      measurementId: "G-5S7XYFVVNT"
+    };
+
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    firebase.analytics();
+
+    function validateEmail(email) {
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return re.test(email);
+    }
+
+    async function showCards(email) {
+      const container = document.getElementById("cards-container");
+      container.innerHTML = "";
+      const docsRef = db.collection("users").doc(email).collection("documents");
+      const snapshot = await docsRef.get();
+      if (snapshot.empty) {
+        container.innerHTML = "<p>No docs assigned to you</p>";
+        return;
+      }
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const card = document.createElement("div");
+        card.className = "card";
+        card.textContent = data.title;
+        card.onclick = () => {
+          window.open(data.url, "_blank");
+          firebase.analytics().logEvent("document_click", { title: data.title });
+        };
+        container.appendChild(card);
+      });
+    }
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        document.getElementById("login-section").classList.add("hidden");
+        document.getElementById("app-section").classList.remove("hidden");
+        document.getElementById("user-info").textContent = "Logged in as " + user.email;
+        showCards(user.email);
+      } else {
+        document.getElementById("login-section").classList.remove("hidden");
+        document.getElementById("app-section").classList.add("hidden");
+      }
+    });
+
+    function login() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const errorDiv = document.getElementById("error-message");
+      const button = document.querySelector("#login-section button");
+      errorDiv.textContent = "";
+      if (!validateEmail(email)) {
+        errorDiv.textContent = "Please enter a valid email address.";
+        return;
+      }
+      if (password.length < 6) {
+        errorDiv.textContent = "Password must be at least 6 characters long.";
+        return;
+      }
+      button.disabled = true;
+      button.textContent = "Logging in...";
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => {
+          firebase.analytics().logEvent("login", { method: "email" });
+        })
+        .catch(err => {
+          errorDiv.textContent = err.code === "auth/user-not-found" 
+            ? "No account found with this email." 
+            : err.message;
+        })
+        .finally(() => {
+          button.disabled = false;
+          button.textContent = "Login";
+        });
+    }
+
+    function signup() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const errorDiv = document.getElementById("error-message");
+      errorDiv.textContent = "";
+      if (!validateEmail(email)) {
+        errorDiv.textContent = "Please enter a valid email address.";
+        return;
+      }
+      if (password.length < 6) {
+        errorDiv.textContent = "Password must be at least 6 characters long.";
+        return;
+      }
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(() => {
+          firebase.analytics().logEvent("sign_up", { method: "email" });
+        })
+        .catch(err => {
+          errorDiv.textContent = err.message;
+        });
+    }
+
+    function logout() {
+      auth.signOut();
+      firebase.analytics().logEvent("logout");
+    }
+  </script>
+</body>
+</html>
