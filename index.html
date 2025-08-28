@@ -43,32 +43,33 @@
       margin: 10px;
     }
     button:hover { background: #0056b3; }
-    .error { color: red; margin: 5px; }
   </style>
 </head>
 <body>
   <h1>Docs Portal</h1>
 
+  <!-- Login Section (always visible first) -->
   <div id="login-section">
-    <input type="email" id="email" placeholder="Email" aria-label="Email address"><br>
-    <input type="password" id="password" placeholder="Password" aria-label="Password"><br>
-    <div id="error-message" class="error"></div>
+    <input type="email" id="email" placeholder="Email"><br>
+    <input type="password" id="password" placeholder="Password"><br>
     <button onclick="login()">Login</button>
     <button onclick="signup()">Sign Up</button>
   </div>
 
+  <!-- App Section (hidden until logged in) -->
   <div id="app-section" class="hidden">
     <p id="user-info"></p>
     <button onclick="logout()">Logout</button>
-    <div class="card-container" id="cards-container"></div>
+    <div class="card-container" id="card-container"></div>
   </div>
 
-  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-analytics.js"></script>
+  <!-- Firebase SDKs (CDN) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
 
   <script>
+    // ✅ Your Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyCz2FAVqRUX2SKE5cqolSFlBic-_9qWnjE",
       authDomain: "smas-96050.firebaseapp.com",
@@ -79,39 +80,42 @@
       measurementId: "G-5S7XYFVVNT"
     };
 
-    const app = firebase.initializeApp(firebaseConfig);
+    // ✅ Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
-    const db = firebase.firestore();
     firebase.analytics();
 
-    function validateEmail(email) {
-      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      return re.test(email);
-    }
+    // 🔹 Docs per user (add your Google Docs here)
+    const docs = {
+      "user@example.com": [
+        { name: "User Doc 1", url: "https://docs.google.com/document/d/EXAMPLE1" }
+      ],
+      "admin@example.com": [
+        { name: "Admin Doc 1", url: "https://docs.google.com/document/d/EXAMPLE2" },
+        { name: "Admin Doc 2", url: "https://docs.google.com/document/d/EXAMPLE3" }
+      ]
+    };
 
-    async function showCards(email) {
-      const container = document.getElementById("cards-container");
+    // Show cards
+    function showCards(email) {
+      const container = document.getElementById("card-container");
       container.innerHTML = "";
-      const docsRef = db.collection("users").doc(email).collection("documents");
-      const snapshot = await docsRef.get();
-      if (snapshot.empty) {
-        container.innerHTML = "<p>No docs assigned to you</p>";
-        return;
+      if (docs[email]) {
+        docs[email].forEach(doc => {
+          const div = document.createElement("div");
+          div.className = "card";
+          div.textContent = doc.name;
+          div.onclick = () => window.location.href = doc.url;
+          container.appendChild(div);
+        });
+      } else {
+        container.innerHTML = "<p>No docs assigned to you.</p>";
       }
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        const card = document.createElement("div");
-        card.className = "card";
-        card.textContent = data.title;
-        card.onclick = () => {
-          window.open(data.url, "_blank");
-          firebase.analytics().logEvent("document_click", { title: data.title });
-        };
-        container.appendChild(card);
-      });
     }
 
+    // 🔹 Auth State
     auth.onAuthStateChanged(user => {
+      console.log("Auth state changed:", user);
       if (user) {
         document.getElementById("login-section").classList.add("hidden");
         document.getElementById("app-section").classList.remove("hidden");
@@ -123,62 +127,23 @@
       }
     });
 
+    // 🔹 Login
     function login() {
       const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-      const errorDiv = document.getElementById("error-message");
-      const button = document.querySelector("#login-section button");
-      errorDiv.textContent = "";
-      if (!validateEmail(email)) {
-        errorDiv.textContent = "Please enter a valid email address.";
-        return;
-      }
-      if (password.length < 6) {
-        errorDiv.textContent = "Password must be at least 6 characters long.";
-        return;
-      }
-      button.disabled = true;
-      button.textContent = "Logging in...";
-      auth.signInWithEmailAndPassword(email, password)
-        .then(() => {
-          firebase.analytics().logEvent("login", { method: "email" });
-        })
-        .catch(err => {
-          errorDiv.textContent = err.code === "auth/user-not-found" 
-            ? "No account found with this email." 
-            : err.message;
-        })
-        .finally(() => {
-          button.disabled = false;
-          button.textContent = "Login";
-        });
+      const pass = document.getElementById("password").value;
+      auth.signInWithEmailAndPassword(email, pass).catch(e => alert(e.message));
     }
 
+    // 🔹 Signup
     function signup() {
       const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-      const errorDiv = document.getElementById("error-message");
-      errorDiv.textContent = "";
-      if (!validateEmail(email)) {
-        errorDiv.textContent = "Please enter a valid email address.";
-        return;
-      }
-      if (password.length < 6) {
-        errorDiv.textContent = "Password must be at least 6 characters long.";
-        return;
-      }
-      auth.createUserWithEmailAndPassword(email, password)
-        .then(() => {
-          firebase.analytics().logEvent("sign_up", { method: "email" });
-        })
-        .catch(err => {
-          errorDiv.textContent = err.message;
-        });
+      const pass = document.getElementById("password").value;
+      auth.createUserWithEmailAndPassword(email, pass).catch(e => alert(e.message));
     }
 
+    // 🔹 Logout
     function logout() {
       auth.signOut();
-      firebase.analytics().logEvent("logout");
     }
   </script>
 </body>
